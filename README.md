@@ -26,8 +26,8 @@ Complete the five TODOs in the following files.
 ```bash
 pip install -r requirements.txt                         # Python 3.11, QuantLib 1.41
 jupyter notebook hw5_valuation_and_first_order_risk.ipynb   # Run All
-python tests/test_yield_curve_gradient.py               # or: python -m pytest tests -q
+python tests/test_yield_curve_gradient.py               # or, with pytest installed: python -m pytest tests -q
 python tests/test_valuation_engine.py
 ```
 
-Only the five `TODO` blocks were filled in; the model, builder, data, product, report and API layers are unchanged.
+Only the two `TODO` files changed. Besides the five `TODO` bodies I added a class docstring and two small accessors (`funding_index`, `cash_amount`) that the tests use; the model, builder, data, product, report and API layers are unchanged.

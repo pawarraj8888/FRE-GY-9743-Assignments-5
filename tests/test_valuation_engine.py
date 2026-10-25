@@ -13,8 +13,10 @@ import sys
 import numpy as np
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+for path in (REPO_ROOT, TESTS_DIR):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from fixedincomelib import (  # noqa: E402
     qfCreateProductFixedAccruedCashflow, qfCreateValuationParameters,

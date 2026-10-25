@@ -160,9 +160,12 @@ def test_local_gradient_scaler_overwrite_and_accumulate():
 
 def test_local_gradient_rejects_bad_containers_and_dates():
     sofr, _ = components(build())
-    for bad in (np.zeros(2), np.zeros(3, dtype=int), [0.0, 0.0, 0.0], np.zeros((3, 1))):
+    for wrong_type in ([0.0, 0.0, 0.0], np.zeros(3, dtype=int)):
+        with raises(TypeError):
+            sofr.discount_factor_gradient_wrt_state(Date(PAYMENT_DATE), wrong_type)
+    for wrong_shape in (np.zeros(2), np.zeros((3, 1))):
         with raises(ValueError):
-            sofr.discount_factor_gradient_wrt_state(Date(PAYMENT_DATE), bad)
+            sofr.discount_factor_gradient_wrt_state(Date(PAYMENT_DATE), wrong_shape)
     for bad_date in (Date("null date"), Date("2025-12-31")):
         with raises(ValueError):
             sofr.discount_factor_gradient_wrt_state(bad_date, np.zeros(3))
@@ -249,12 +252,14 @@ def test_model_gradient_on_the_value_date_is_zero():
 
 def test_model_gradient_rejects_unknown_components_and_bad_containers():
     model = build()
+    untouched = [np.full(3, 9.0), np.full(2, 9.0)]
     with raises(KeyError):
-        model.discount_factor_gradient_wrt_state("SONIA-1B", Date(PAYMENT_DATE), [])
+        model.discount_factor_gradient_wrt_state("SONIA-1B", Date(PAYMENT_DATE), untouched)
+    with raises(ValueError):
+        model.discount_factor_gradient_wrt_state(FUNDING_INDEX, Date("2025-12-31"), untouched)
+    assert all(np.all(block == 9.0) for block in untouched)       # a failed call has no side effects
     with raises(TypeError):
         model.discount_factor_gradient_wrt_state(FUNDING_INDEX, Date(PAYMENT_DATE), np.zeros(5))
-    with raises(ValueError):
-        model.discount_factor_gradient_wrt_state(FUNDING_INDEX, Date("2025-12-31"), [])
 
 
 def test_gradient_survives_a_serialization_round_trip():

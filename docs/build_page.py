@@ -27,7 +27,7 @@ node_dates = [list(SOFR_NODES), list(FUNDING_NODES)]
 W, L, R = 760, 60, 20
 x_max = 2.2
 def x(t): return L + (W - L - R) * t / x_max
-def panel(top, height, times, values, y_lo, y_hi, fmt, colour, shade, title):
+def panel(top, height, times, values, y_lo, y_hi, steps, fmt, colour, shade, title):
     def y(v): return top + height * (1 - (v - y_lo) / (y_hi - y_lo))
     parts = [f'<rect x="{L}" y="{top}" width="{W-L-R}" height="{height}" fill="none" stroke="#d8d8d8"/>']
     lower = 0.0
@@ -35,20 +35,23 @@ def panel(top, height, times, values, y_lo, y_hi, fmt, colour, shade, title):
         upper = x_max if i == len(times) - 1 else t
         inside = min(upper, T)
         if inside > lower:
+            # the shaded area is the bucket's share of the integral; the dashed outline marks the bucket itself,
+            # which matters when the rate in it is zero and there is no area to shade
             parts.append(f'<rect x="{x(lower):.1f}" y="{y(v):.1f}" width="{x(inside)-x(lower):.1f}" height="{top+height-y(v):.1f}" fill="{shade}"/>')
+            parts.append(f'<rect x="{x(lower):.1f}" y="{top}" width="{x(inside)-x(lower):.1f}" height="{height}" fill="none" stroke="{colour}" stroke-opacity="0.35" stroke-dasharray="3 3"/>')
             parts.append(f'<text x="{(x(lower)+x(inside))/2:.1f}" y="{top+height-6}" font-size="11" text-anchor="middle" fill="#333">w = {inside-lower:.6f}</text>')
         parts.append(f'<line x1="{x(lower):.1f}" y1="{y(v):.1f}" x2="{x(upper):.1f}" y2="{y(v):.1f}" stroke="{colour}" stroke-width="2"/>')
         if i < len(times) - 1:
             parts.append(f'<line x1="{x(t):.1f}" y1="{y(v):.1f}" x2="{x(t):.1f}" y2="{y(values[i+1]):.1f}" stroke="{colour}" stroke-width="1" stroke-dasharray="2 2"/>')
         lower = upper
     parts.append(f'<line x1="{x(T):.1f}" y1="{top}" x2="{x(T):.1f}" y2="{top+height}" stroke="#b00" stroke-width="1.5" stroke-dasharray="4 3"/>')
-    ticks = [y_lo + k * (y_hi - y_lo) / 4 for k in range(5)]
+    ticks = [y_lo + k * (y_hi - y_lo) / steps for k in range(steps + 1)]
     parts += [f'<text x="{L-6}" y="{y(v)+4:.1f}" font-size="11" text-anchor="end" fill="#555">{fmt(v)}</text>' for v in ticks]
     parts.append(f'<text x="{L+8}" y="{top+14}" font-size="12" fill="{colour}">{title}</text>')
     return "".join(parts)
 svg = f"""<svg viewBox="0 0 {W} 330" width="100%" role="img" aria-label="SOFR forward rate and funding spread steps with the buckets inside [0, T] shaded">
-{panel(14, 150, sofr.state_data[0], sofr.state_data[1], 0.02, 0.06, lambda v: f"{v*100:.0f}%", "#1f4e79", "#dbe7f3", "SOFR-1B instantaneous forward rate")}
-{panel(180, 110, funding.state_data[0], funding.state_data[1], 0.0, 0.002, lambda v: f"{v*1e4:.0f} bp", "#8a4b00", "#f6e7d2", "SOFR-1B-FLAT spread over SOFR")}
+{panel(14, 150, sofr.state_data[0], sofr.state_data[1], 0.0, 0.06, 6, lambda v: f"{v*100:.0f}%", "#1f4e79", "#dbe7f3", "SOFR-1B instantaneous forward rate")}
+{panel(180, 110, funding.state_data[0], funding.state_data[1], 0.0, 0.002, 4, lambda v: f"{v*1e4:.0f} bp", "#8a4b00", "#f6e7d2", "SOFR-1B-FLAT spread over SOFR")}
 {''.join(f'<line x1="{x(t):.1f}" y1="290" x2="{x(t):.1f}" y2="296" stroke="#888"/><text x="{x(t):.1f}" y="310" font-size="11" text-anchor="middle" fill="#555">{t:g}Y</text>' for t in (0, 0.5, 1, 1.5, 2))}
 <text x="{x(T):.1f}" y="325" font-size="11" text-anchor="middle" fill="#b00">payment T = {T:.6f}</text>
 </svg>"""
@@ -85,8 +88,8 @@ gradient is <span class="formula">D<sub>spread</sub> &middot; &part;D<sub>SOFR</
 The fixed-accrual cashflow pays C = notional &times; accrual on T, so PV = C &middot; D<sub>funding</sub>(T) and its risk is C times that gradient.</p>
 <h2>The two step functions and the buckets that matter for the {PAYMENT_DATE} payment</h2>
 {svg}
-<p>Shaded areas are the integrals the discount factors are built from; the width of each shaded block is the node's bucket length w<sub>i</sub>, which is also its
-gradient weight. The third SOFR node starts after the payment date and carries no risk; the first spread node carries risk although its spread is zero.</p>
+<p>Each dashed block is one node's bucket inside [0, T] and the shaded part is that bucket's share of the integral the discount factor is built from; the width of the block
+is the bucket length w<sub>i</sub>, which is also the node's gradient weight. The third SOFR node starts after the payment date and carries no risk; the first spread node carries risk although its spread is zero.</p>
 <h2>Discount-factor gradients</h2>
 <p>D<sub>SOFR</sub>(T) = {d_sofr:.6f}, D<sub>spread</sub>(T) = {d_spread:.6f}, D<sub>funding</sub>(T) = {d_sofr * d_spread:.6f}.</p>
 {table(["Component", "Node", "Time (years)", "IFR", "w_i", "local dD/df_i", "dD_funding/df_i"], gradient_rows)}

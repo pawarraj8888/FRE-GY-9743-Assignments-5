@@ -23,15 +23,15 @@ From a starting point $X_I^{(0)}$ (yesterday's calibration, or a flat state) I i
 J\bigl(X_I^{(k)}\bigr)\,\Delta^{(k)} = -F\bigl(X_I^{(k)}\bigr),\qquad X_I^{(k+1)}=X_I^{(k)}+\lambda\,\Delta^{(k)},\qquad
 J=\frac{\partial V}{\partial X_I},
 \]
-solving the linear system rather than inverting $J$, with a step length $\lambda\le1$ (a line search, or Levenberg-Marquardt damping)
-when I start far away, and bounds that keep the state admissible. I stop when $\|F\|$ is below a tolerance measured in quote units, a
+solving the linear system rather than inverting $J$, with a line search on the step length $\lambda\le1$, or Levenberg-Marquardt
+damping of the linear system, when I start far away, and bounds that keep the state admissible. I stop when $\|F\|$ is below a tolerance measured in quote units, a
 small fraction of a basis point or of a vol point. The Jacobian comes analytically when the model exposes $\partial V/\partial X_I$,
 which is what the gradient methods in this library are for; otherwise by finite differences, at $n$ extra pricings per iteration.
 Two things make the problem easier in practice. If instrument $i$ only depends on the first $i$ state variables, $J$ is lower
 triangular and Newton collapses into $n$ one-dimensional root searches done in order: that is bootstrapping a curve node by node, with
-Brent or the secant method. And if each $V_i$ is monotone in the parameter it mostly depends on (a price in a vol, a swap rate in a
-forward rate), the solution is unique and Newton converges in a handful of steps. Existence and uniqueness need $J$ non-singular at the
-solution, which is also what the next question needs.
+Brent or the secant method. In that bootstrapped case, if each $V_i$ is monotone in its own node (a price in a vol, a swap rate in a
+forward rate), every one-dimensional solve has a single root and the curve is unique. In general I only get local uniqueness, and the
+derivative in the next question, when $J$ is non-singular at the solution, which is the hypothesis of the implicit function theorem.
 
 \textbf{Q2: $dX_I/dX_M$ at the solution.} The calibrated state is a function of the quotes, $X_I^*(X_M)$, defined implicitly by
 $V\bigl(X_I^*(X_M)\bigr)=X_M$. Differentiating that identity with respect to $X_M$ and using the chain rule,
@@ -45,7 +45,8 @@ held fixed. It is also how model risk becomes market risk: for any trade with va
 \[
 \frac{dP}{dX_M}=\frac{\partial P}{\partial X_I}\,J^{-1},
 \]
-so a vector of state sensitivities (what Part~II computes) becomes hedge ratios in the quoted instruments after one linear solve.
+so a vector of state sensitivities (what Part~II computes) becomes risk in the quoted instruments after one linear solve, and a hedge
+ratio once each entry is divided by that instrument's own sensitivity to its quote (one for a price, the annuity for a par rate).
 In this assignment the state \emph{is} the quote (the IFR nodes are the inputs), so $J=I$ and the risk report needs no Jacobian; a
 curve calibrated to swap rates would need the $J^{-1}$ step. If $J$ is nearly singular the entries of $J^{-1}$ blow up, and the theorem
 is telling me that the calibration itself is unstable, not that the hedges are large.
@@ -70,15 +71,15 @@ How $\sigma(K)$ moves with $\theta$ is the gradient of the interpolator, $\parti
 numbers per strike; for the quadratic it is just the basis $(1,x,x^2)$. The more useful question is how the whole smile moves when a quote
 moves, and that is Q2 again: $d\sigma(K)/dP=\bigl(\partial\sigma(K)/\partial\theta\bigr)J^{-1}$, or in vol terms
 $d\sigma(K)/d\sigma^{\mathrm{mkt}}=\bigl(\partial\sigma(K)/\partial\theta\bigr)\bigl[\partial\sigma(K_i;\theta)/\partial\theta\bigr]^{-1}$,
-three weights that say how much of each quoted option reproduces a vol move at $K$ (for an interpolator that can represent a flat smile
-they sum to one, because shifting the three quotes together shifts the whole smile).
+three weights that say how much of each quoted option reproduces a vol move at $K$ (for an interpolator with a pure level parameter, such
+as $\theta_0$ here, they sum to one, because shifting the three quotes together shifts the whole smile).
 
 \textbf{What $\theta$ means to a trader.} Nobody quotes $\theta_0,\theta_1,\theta_2$. The desk quotes the ATM vol, the risk reversal
 $\sigma(K_3)-\sigma(K_1)$ and the butterfly $\tfrac12\bigl(\sigma(K_1)+\sigma(K_3)\bigr)-\sigma(K_{\mathrm{atm}})$: level, slope and
 curvature of the smile. With three parameters and three quotes the map between them is one-to-one, and for symmetric strikes
 $x_3=-x_1=d$, $x_{\mathrm{atm}}=0$ it is explicit: $\mathrm{ATM}=\theta_0$, $\mathrm{RR}=2\theta_1d$, $\mathrm{BF}=\theta_2d^2$. So
 intuitively $\theta_0$ is the level, $\theta_1$ the skew (the tilt of the smile, the spot-vol correlation, $\rho$ in SABR) and $\theta_2$
-the smile (its convexity, the vol of vol, $\nu$ in SABR). If I parameterise the interpolator directly in (ATM, RR, BF), then
+the smile (its convexity, the vol of vol, $\nu$ in SABR). If I parameterize the interpolator directly in (ATM, RR, BF), then
 $\partial\sigma(K)/\partial\theta$ reads as ``vol points at $K$ per vol point of ATM, of RR and of BF'', which is the form in which the
 trader hedges it with the three quoted options.
 
@@ -97,7 +98,7 @@ future payment, $PV=\mathrm{cash}=C$ on the value date, and zeros for a past pay
 gradient, with $C$ passed through as the scaler, and zero blocks (or nothing added) when there is no discount factor to differentiate.
 
 The notebook's case: value date 2026-01-02, payment 2026-10-02, so $T=273/365=0.747945$.
-The SOFR IFR nodes sit at $0.246575$, $1$ and $2$ years and the spread nodes at $0.495890$ and $1$ year, so the bucket lengths inside
+The SOFR IFR nodes sit at $0.246575$, $1$ and $1.999993$ years (ACT/ACT ISDA, so the 2028 leap day pulls the last one just under $2$) and the spread nodes at $0.495890$ and $1$ year, so the bucket lengths inside
 $[0,T]$ are $(0.246575,\ 0.501370,\ 0)$ and $(0.495890,\ 0.252055)$: the third SOFR node carries no risk, and the first spread node does
 even though its spread is zero. With $D_{\mathrm{SOFR}}=0.972921$, $D_{\mathrm{spread}}=0.999748$,
 $D_{\mathrm{funding}}=0.972676$ and $C=1{,}000{,}000\times91/360=252,777.78$, the cashflow is worth
@@ -115,7 +116,7 @@ SOFR-1B-FLAT & 2027-01-02 & 0.001 & 0.252055 & -0.251991 & -0.245168 & -61,972.9
 \bottomrule\end{tabular}\end{center}
 
 The notebook runs top to bottom with the professor's cells untouched; its printed gradients, PV and risk table agree with the hand
-calculation above to the six printed decimals. \path{tests/test_yield_curve_gradient.py} (16 tests) checks the
+calculation above at the precision shown. \path{tests/test_yield_curve_gradient.py} (16 tests) checks the
 local and model gradients against the bucket-length formula and against central bump-and-reval through
 \code{perturb\_model\_parameter}, the product rule, the overwrite and accumulate semantics, block allocation, serialization and the
 validation errors; \path{tests/test_valuation_engine.py} (12 tests) checks the engine's PV, cash and risk for future,

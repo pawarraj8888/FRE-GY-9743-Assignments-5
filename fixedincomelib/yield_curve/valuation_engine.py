@@ -43,14 +43,15 @@ class ValuationEngineProductFixedAccrued(ValuationEngineProduct):
     def cash_amount(self) -> float:
         return self.cash_amount_
 
-    def pays_in_the_future(self) -> bool:
+    @property
+    def is_future_payment(self) -> bool:
         return self.payment_date_ > self.value_date
 
     def calculate_value(self) -> None:
         if self.payment_date_ < self.value_date:
             # Already paid: nothing is left on the contract.
             self.value_, self.cash_ = 0.0, 0.0
-        elif not self.pays_in_the_future():
+        elif not self.is_future_payment:
             # Pays today: a known cash amount, nothing to discount.
             self.value_, self.cash_ = self.cash_amount_, self.cash_amount_
         else:
@@ -62,7 +63,7 @@ class ValuationEngineProductFixedAccrued(ValuationEngineProduct):
     def calculate_risk(
         self, gradient: list[np.ndarray], scaler: float = 1.0, accumulate: bool = False,
     ) -> None:
-        if self.pays_in_the_future():
+        if self.is_future_payment:
             # PV = C * D(T_p): the raw risk is C times the model's DF gradient, block by block.
             self.model.discount_factor_gradient_wrt_state(
                 self.funding_index_, self.payment_date_, gradient,

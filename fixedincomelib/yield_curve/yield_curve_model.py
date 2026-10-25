@@ -88,6 +88,11 @@ class YieldCurve(Model):
         scaler: float = 1.0, accumulate: bool = False,
     ) -> None:
         """Write raw DF derivatives into component-ordered blocks in place."""
+        # Check the request before touching the caller's container, so that a bad index or
+        # date fails without side effects, the way discount_factor does.
+        self.retrieve_model_component(index)
+        if expiry_date.serialNumber() == 0 or expiry_date < self.value_date:
+            raise ValueError("A valid discount-factor date on or after the value date is required.")
         # One block per component, in registration order. Overwriting replaces every block,
         # so a component that is not on this index's reference chain comes back as zeros.
         self.resize_gradient(gradient_vector)
@@ -191,14 +196,12 @@ class YieldCurveModelComponent(ModelComponent):
         scaler: float = 1.0, accumulate: bool = False,
     ) -> None:
         """Write raw local DF derivatives into the supplied array in place."""
-        if (
-            not isinstance(gradient_vector, np.ndarray)
-            or gradient_vector.shape != (self.num_state_data,)
-            or not np.issubdtype(gradient_vector.dtype, np.floating)
+        if not isinstance(gradient_vector, np.ndarray) or not np.issubdtype(
+            gradient_vector.dtype, np.floating
         ):
-            raise ValueError(
-                f"gradient_vector must be a float array of shape ({self.num_state_data},)"
-            )
+            raise TypeError("gradient_vector must be a floating-point NumPy array")
+        if gradient_vector.shape != (self.num_state_data,):
+            raise ValueError(f"gradient_vector must have shape ({self.num_state_data},)")
 
         # D_local(t) = exp(-I) with I = integral_0^t f, so dD/df_i = -D * dI/df_i, and dI/df_i
         # is the length of node i's bucket inside [0, t]: the interpolator's integral gradient.
